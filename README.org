@@ -9,15 +9,12 @@ thanks to dissononce.
 You might want to read this blogpost on this topic and on more info:
 https://www.ctrlc.hu/~stef/blog/posts/How_to_recover_static_secrets_using_OPAQUE.html
 
-** Depends
+** Installation
 
- - https://github.com/stef/libopaque/ which also depends on libsodium.
+opaquestore depends on https://github.com/stef/libopaque/ which also
+depends on libsodium.
 
-The following dependencies are python modules that are available on pypi:
-
-#+BEGIN_EXAMPLE
-pip install opaque pysodium dissononce zxcvbn-python SecureString
-#+END_EXAMPLE
+When you have libopaque, a simple `pip install opaquestore` should get you started.
 
 ** API
 
@@ -26,15 +23,19 @@ The client provides two simple functions for creating and querying blobs:
 Store a new blob:
 
 #+BEGIN_SRC python
-   s = NoiseWrapper.connect(cfg['address'], cfg['port'], cfg['noise_key'], cfg['server_pubkey'])
-   client.create(s, password, blob_id, blob)
+  from opaquestore import opaquestore
+  from opaquestore.noiseclient import NoiseWrapper
+  s = NoiseWrapper.connect(cfg['address'], cfg['port'], cfg['noise_key'], cfg['server_pubkey'])
+  opaquestore.create(s, password, blob_id, blob)
 #+END_SRC
 
 To query an existing blob:
 
 #+BEGIN_SRC python
-   s = NoiseWrapper.connect(cfg['address'], cfg['port'], cfg['noise_key'], cfg['server_pubkey'])
-   blob = client.get(s, password, blob_id)
+  from opaquestore import opaquestore
+  from opaquestore.noiseclient import NoiseWrapper
+  s = NoiseWrapper.connect(cfg['address'], cfg['port'], cfg['noise_key'], cfg['server_pubkey'])
+  blob = opaquestore.get(s, password, blob_id)
 #+END_SRC
 
 The `cfg` variable should be loaded with the values from a configfile or otherwise populated.
@@ -50,13 +51,13 @@ the server config.
 Run the server
 
 #+BEGIN_EXAMPLE
-./server.py
+opaquestore server
 #+END_EXAMPLE
 
 Store a new blob:
 
 #+BEGIN_EXAMPLE
-echo -en "mypassword\!sMyV0ice\nmy secretty token data that i need to protect and store using opaque" | ./client.py create cfba1e747f706b542451a9d5404346f8
+echo -en "mypassword\!sMyV0ice\nmy secretty token data that i need to protect and store using opaque" | opaquestore create cfba1e747f706b542451a9d5404346f8
 #+END_EXAMPLE
 
 the password and the blob are expected on stdin, in this order,
@@ -66,7 +67,7 @@ used to refer to the blob.
 Recall the blob:
 
 #+BEGIN_EXAMPLE
-echo -en "mypassword\!sMyV0ice" | ./client.py get cfba1e747f706b542451a9d5404346f8
+echo -en "mypassword\!sMyV0ice" | opaquestore get cfba1e747f706b542451a9d5404346f8
 #+END_EXAMPLE
 
 The password is again supplied on stdin, and the same ID as used for
