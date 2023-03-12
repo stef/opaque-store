@@ -48,6 +48,14 @@ the server config.
 
 ** Example
 
+Generate keys
+
+#+BEGIN_EXAMPLE
+opaquestore genkey
+#+END_EXAMPLE
+
+This should output a private key and a public key, these you can/should use in the configfiles.
+
 Run the server
 
 #+BEGIN_EXAMPLE

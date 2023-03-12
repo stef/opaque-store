@@ -12,6 +12,7 @@ from dissononce.dh.x25519.keypair import KeyPair
 from dissononce.dh.x25519.public import PublicKey
 from opaquestore.noiseclient import NoiseWrapper
 from opaquestore import server
+from opaquestore import genkey
 
 #### consts ####
 
@@ -155,6 +156,8 @@ def main(params=sys.argv):
     args = (pwd, unhexlify(params[2]))
   elif params[1] == 'server':
     return server.main()
+  elif params[1] == 'genkey':
+    return genkey.main()
   #elif params[1] == 'update':
   #  cmd = change
   #  args = () #(user, site, classes, syms, size, target)
