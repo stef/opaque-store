@@ -10,7 +10,8 @@ from SecureString import clearmem
 from binascii import unhexlify, a2b_base64, b2a_base64
 from dissononce.dh.x25519.keypair import KeyPair
 from dissononce.dh.x25519.public import PublicKey
-from noiseclient import NoiseWrapper
+from opaquestore.noiseclient import NoiseWrapper
+from opaquestore import server
 
 #### consts ####
 
@@ -113,6 +114,7 @@ def change(s):
 
 def usage(params, help=False):
   print("usage: %s " % params[0])
+  print("      %s server" % params[0])
   print("      echo -en 'password\ntoken2store' | %s create <keyid>" % params[0])
   print("                    echo -n 'password' | %s get <keyid>" % params[0])
   if help: sys.exit(0)
@@ -151,6 +153,8 @@ def main(params=sys.argv):
     cmd = get
     pwd = getpwd()
     args = (pwd, unhexlify(params[2]))
+  elif params[1] == 'server':
+    return server.main()
   #elif params[1] == 'update':
   #  cmd = change
   #  args = () #(user, site, classes, syms, size, target)

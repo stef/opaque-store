@@ -16,7 +16,7 @@ https://www.ctrlc.hu/~stef/blog/posts/How_to_recover_static_secrets_using_OPAQUE
 The following dependencies are python modules that are available on pypi:
 
 #+BEGIN_EXAMPLE
-pip install opaque pysodium dissononce zxcvbn SecureString
+pip install opaque pysodium dissononce zxcvbn-python SecureString
 #+END_EXAMPLE
 
 ** API
