@@ -6,6 +6,9 @@ of blobs, which can be recovered using only a password.
 Client-Server Communication is protected using a Noise-XK pattern
 thanks to dissononce.
 
+You might want to read this blogpost on this topic and on more info:
+https://www.ctrlc.hu/~stef/blog/posts/How_to_recover_static_secrets_using_OPAQUE.html
+
 ** Depends
 
  - https://github.com/stef/libopaque/ which also depends on libsodium.
