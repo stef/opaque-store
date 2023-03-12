@@ -1,0 +1,70 @@
+* OPAQUE-store
+
+This is a simple client-server system, which implements a simple online storage
+of blobs, which can be recovered using only a password.
+
+Client-Server Communication is protected using a Noise-XK pattern
+thanks to dissononce.
+
+** Depends
+
+ - https://github.com/stef/libopaque/ which also depends on libsodium.
+
+The following dependencies are python modules that are available on pypi:
+
+#+BEGIN_EXAMPLE
+pip install opaque pysodium dissononce zxcvbn SecureString
+#+END_EXAMPLE
+
+** API
+
+The client provides two simple functions for creating and querying blobs:
+
+Store a new blob:
+
+#+BEGIN_SRC python
+   s = NoiseWrapper.connect(cfg['address'], cfg['port'], cfg['noise_key'], cfg['server_pubkey'])
+   client.create(s, password, blob_id, blob)
+#+END_SRC
+
+To query an existing blob:
+
+#+BEGIN_SRC python
+   s = NoiseWrapper.connect(cfg['address'], cfg['port'], cfg['noise_key'], cfg['server_pubkey'])
+   blob = client.get(s, password, blob_id)
+#+END_SRC
+
+The `cfg` variable should be loaded with the values from a configfile or otherwise populated.
+
+** Configfiles
+
+For an example and documentation on the values in the config files
+see: opaque-store.cfg for the client config, and opaque-stored.cfg for
+the server config.
+
+** Example
+
+Run the server
+
+#+BEGIN_EXAMPLE
+./server.py
+#+END_EXAMPLE
+
+Store a new blob:
+
+#+BEGIN_EXAMPLE
+echo -en "mypassword\!sMyV0ice\nmy secretty token data that i need to protect and store using opaque" | ./client.py create cfba1e747f706b542451a9d5404346f8
+#+END_EXAMPLE
+
+the password and the blob are expected on stdin, in this order,
+seperated by a newline. The second parameter to the client is an ID
+used to refer to the blob.
+
+Recall the blob:
+
+#+BEGIN_EXAMPLE
+echo -en "mypassword\!sMyV0ice" | ./client.py get cfba1e747f706b542451a9d5404346f8
+#+END_EXAMPLE
+
+The password is again supplied on stdin, and the same ID as used for
+creation is used as reference.
