@@ -4,11 +4,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import socket, sys, os, datetime, binascii, os.path, traceback, struct
-import pysodium, opaque, tomllib
+import pysodium, opaque, tomllib, select
 from dissononce.extras.meta.protocol.factory import NoiseProtocolFactory
 from dissononce.processing.handshakepatterns.interactive.XK import XKHandshakePattern
 from dissononce.dh.x25519.keypair import KeyPair
 from dissononce.dh.x25519.public import PublicKey
+from binascii import a2b_base64, b2a_base64
+from noiseclient import NoiseWrapper
+import ctypes as c
 
 config = None
 
@@ -16,8 +19,74 @@ CREATE   =b'\x00'
 GET      =b'\x66'
 EXOP     =b'\xE0' # unimplemented
 
+DKG = 1
+Evaluate  = 2
+
+KEYID_SIZE = 16
+KLUTSHNIK_VERSION = 1
+
 normal = "\033[38;5;%sm"
 reset = "\033[0m"
+
+oprflib = c.cdll.LoadLibrary(c.util.find_library('oprf') or
+                             c.util.find_library('liboprf.so') or
+                             c.util.find_library('liboprf') or
+                             c.util.find_library('liboprf0'))
+if not oprflib._name:
+   raise ValueError('Unable to find liboprf')
+
+kmslib = c.cdll.LoadLibrary(c.util.find_library('kms') or
+                            c.util.find_library('libkms.so') or
+                            c.util.find_library('libkms') or
+                            c.util.find_library('libkms0'))
+if not kmslib._name:
+   raise ValueError('Unable to find libkms')
+
+def thresholdmult(threshold, parts):
+   beta = c.create_string_buffer(pysodium.crypto_core_ristretto255_BYTES)
+   if kmslib.toprf_thresholdmult(threshold, b''.join(parts[:threshold]), beta) != 0:
+       raise ValueError
+   return beta.raw
+
+@c.CFUNCTYPE(c.c_int, c.POINTER(c.c_ubyte), c.POINTER(c.c_ubyte), c.POINTER(c.c_ubyte))
+def toprf_eval(keyid, alpha, beta):
+  servers=parse_servers(config)
+  n = len(servers)
+  t = config['threshold']
+  keyid_ = bytes(keyid[:16])
+  conns = connect(servers, Evaluate, t, n, keyid_)
+
+  msg = bytes(alpha[:32]) + bytes(alpha[:32])
+  for index,conn in enumerate(conns):
+    # todo eval needs also a verifier, which we ignore here...
+    conn.sendall(msg)
+
+  # receive responses from tuokms_evaluate
+  responders=gather(conns, 33*2, n, lambda pkt: (pkt[:33], pkt[33:]))
+
+  xresps = tuple(responders[i][0] for i in range(n))
+
+  # we only select the first t shares, should be rather random
+  beta_ = thresholdmult(t, xresps)
+
+  c.memmove(beta, beta_, len(beta_))
+
+  return 0
+
+@c.CFUNCTYPE(None, c.POINTER(c.c_ubyte))
+def toprf_keygen(keyid):
+  #print("toprf_keygen(%d, %d)" % (k.value))
+  keyid_ = dkg(parse_servers(config), config['threshold'])
+  c.memmove(keyid, keyid_, len(keyid_))
+
+def parse_servers(config):
+   res = []
+   for k,v in config.get('servers',{}).items():
+       host = v.get('host',"localhost")
+       port = v.get('port')
+       pubkey=PublicKey(a2b_base64(v['pubkey']))
+       res.append((host, port, pubkey))
+   return res
 
 def getcfg():
   paths=[
@@ -40,9 +109,85 @@ def getcfg():
 
   config['noise_key']=KeyPair.from_bytes(binascii.a2b_base64(config['noise_key']+'=='))
   config['id_nonce']=binascii.a2b_base64(config['id_nonce']+'==')
+
+  if 'servers' in config:
+    print("found servers in config, switching to threshold opaque")
+    oprflib.oprf_set_evalproxy(toprf_eval, toprf_keygen)
+
+  with open(config['key'],'rb') as fd:
+    config['key']=KeyPair.from_bytes(a2b_base64(fd.read()))
+
   return config
 
-class NoiseWrapper():
+def split_by_n(obj, n):
+  # src https://stackoverflow.com/questions/9475241/split-string-every-nth-character
+  return [obj[i:i+n] for i in range(0, len(obj), n)]
+
+def connect(servers, op, threshold, n, keyid):
+   global config
+   authkey = a2b_base64(config['authkey'])
+
+   conns = []
+   for host,port,pubkey in servers:
+       fd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+       fd.settimeout(15)
+       fd.connect((host, port))
+       noised =NoiseWrapper(fd, config['key'], pubkey)
+       conns.append(noised)
+
+   for index,c in enumerate(conns):
+      msg = b"%c%c%c%c%c%s" % (KLUTSHNIK_VERSION, op, index+1, threshold, n, keyid)
+      c.sendall(msg)
+
+   for c in conns:
+      msg = authkey
+      c.sendall(msg)
+
+   return conns
+
+def gather(conns, expectedmsglen, n, proc=None):
+   responses={}
+   while len(responses)!=n:
+      fds={x.fd: (i, x) for i,x in enumerate(conns)}
+      r, _,_ =select.select(fds.keys(),[],[],5)
+      if not r: sys.exit(1)
+      for fd in r:
+         idx = fds[fd][0]
+         if idx in responses:
+            continue
+         pkt = fds[fd][1].read_pkt(expectedmsglen)
+         responses[idx]=pkt if not proc else proc(pkt)
+   return responses
+
+def dkg(servers,threshold):
+   n = len(servers)
+   keyid = pysodium.randombytes(KEYID_SIZE)
+   conns = connect(servers, DKG, threshold, n, keyid)
+
+   responders=gather(conns, (pysodium.crypto_core_ristretto255_BYTES * threshold) + (33*n*2), n, lambda x: (x[:threshold*pysodium.crypto_core_ristretto255_BYTES], split_by_n(x[threshold*pysodium.crypto_core_ristretto255_BYTES:], 2*33)) )
+
+   commitments = b''.join(responders[i][0] for i in range(n))
+   for i in range(n):
+       shares = b''.join([responders[j][1][i] for j in range(n)])
+       msg = commitments + shares
+       conns[i].sendall(msg)
+
+   oks = gather(conns, 66, n)
+   # we ignore the response
+
+   #shares = b''.join(oks[i] for i in range(n))
+   #yc = c.create_string_buffer(pysodium.crypto_core_ristretto255_BYTES)
+   #kmslib.tuokms_pubkey(n, threshold, shares, yc)
+
+   authtoken = conns[0].read_pkt(0)
+   #setauthkey(keyid,authtoken)
+   print("authtoken for new key: ", b2a_base64(authtoken).decode('utf8').strip())
+   for c in conns:
+     c.fd.close()
+
+   return keyid
+
+class NoiseWrapperServer():
    def __init__(self, fd):
       global config
       self.fd = fd
@@ -217,7 +362,7 @@ def main():
 
             pid=os.fork()
             if pid==0:
-              conn = NoiseWrapper(conn)
+              conn = NoiseWrapperServer(conn)
               try:
                 handler(conn)
               except:
