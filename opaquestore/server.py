@@ -2,17 +2,14 @@
 # SPDX-FileCopyrightText: 2023, Marsiske Stefan
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import socket, sys, os, datetime, binascii, os.path, traceback, struct
-import pysodium, opaque, tomllib, select
-from dissononce.extras.meta.protocol.factory import NoiseProtocolFactory
-from dissononce.processing.handshakepatterns.interactive.XK import XKHandshakePattern
+import socket, sys, os, datetime, os.path, traceback
+import pysodium, opaque
 from dissononce.dh.x25519.keypair import KeyPair
 from dissononce.dh.x25519.public import PublicKey
 from binascii import a2b_base64, b2a_base64
-import ctypes as c
-from klutshnik.wrapper import thresholdmult, DKG, Evaluate, KEYID_SIZE, VERSION as KLUTSHNIK_VERSION
-from klutshnik.utils import getcfg, split_by_n
-from klutshnik.noiseclient import connect, gather
+from klutshnik.utils import getcfg
+from opaquestore import toprf
+from opaquestore.noiseclient import NoiseWrapperServer
 
 config = None
 
@@ -23,133 +20,25 @@ EXOP     =b'\xE0' # unimplemented
 normal = "\033[38;5;%sm"
 reset = "\033[0m"
 
-oprflib = c.cdll.LoadLibrary(c.util.find_library('oprf') or
-                             c.util.find_library('liboprf.so') or
-                             c.util.find_library('liboprf') or
-                             c.util.find_library('liboprf0'))
-if not oprflib._name:
-   raise ValueError('Unable to find liboprf')
-
-@c.CFUNCTYPE(c.c_int, c.POINTER(c.c_ubyte), c.POINTER(c.c_ubyte), c.POINTER(c.c_ubyte))
-def toprf_eval(keyid, alpha, beta):
-  servers=config['servers']
-  n = len(servers)
-  t = config['threshold']
-  keyid_ = bytes(keyid[:16])
-  conns = connect(servers, Evaluate, t, n, keyid_, config['key'], config['authkey'], KLUTSHNIK_VERSION)
-
-  msg = bytes(alpha[:32]) + bytes(alpha[:32])
-  for index,conn in enumerate(conns):
-    # todo eval needs also a verifier, which we ignore here...
-    conn.sendall(msg)
-
-  # receive responses from tuokms_evaluate
-  responders=gather(conns, 33*2, n, lambda pkt: (pkt[:33], pkt[33:]))
-
-  xresps = tuple(responders[i][0] for i in range(n))
-
-  # we only select the first t shares, should be rather random
-  beta_ = thresholdmult(t, xresps)
-
-  c.memmove(beta, beta_, len(beta_))
-
-  return 0
-
-@c.CFUNCTYPE(None, c.POINTER(c.c_ubyte))
-def toprf_keygen(keyid):
-  # slightly simpler than klutshnik dkg
-  #print("toprf_keygen(%d, %d)" % (k.value))
-  n = len(config['servers'])
-  threshold = config['threshold']
-  keyid_ = pysodium.randombytes(KEYID_SIZE)
-  conns = connect(config['servers'], DKG, threshold, n, keyid_, config['key'], config['authkey'], KLUTSHNIK_VERSION)
-
-  responders=gather(conns, (pysodium.crypto_core_ristretto255_BYTES * threshold) + (33*n*2), n, lambda x: (x[:threshold*pysodium.crypto_core_ristretto255_BYTES], split_by_n(x[threshold*pysodium.crypto_core_ristretto255_BYTES:], 2*33)) )
-
-  commitments = b''.join(responders[i][0] for i in range(n))
-  for i in range(n):
-      shares = b''.join([responders[j][1][i] for j in range(n)])
-      msg = commitments + shares
-      conns[i].sendall(msg)
-
-  oks = gather(conns, 66, n)
-
-  authtoken = conns[0].read_pkt(0)
-  #setauthkey(keyid_,authtoken)
-  print("authtoken for new key: ", b2a_base64(authtoken).decode('utf8').strip())
-  for conn in conns:
-    conn.fd.close()
-
-  c.memmove(keyid, keyid_, len(keyid_))
-
 def processcfg(config):
-  config['noise_key']=KeyPair.from_bytes(binascii.a2b_base64(config['noise_key']+'=='))
-  config['id_nonce']=binascii.a2b_base64(config['id_nonce']+'==')
+  config['noise_key']=KeyPair.from_bytes(a2b_base64(config['noise_key']+'=='))
+  config['id_nonce']=a2b_base64(config['id_nonce']+'==')
 
   if 'servers' in config:
     print("found servers in config, switching to threshold opaque")
-    oprflib.oprf_set_evalproxy(toprf_eval, toprf_keygen)
+    toprf.lib.oprf_set_evalproxy(toprf.eval, toprf.keygen)
     config['servers'] = [(v.get('host',"localhost"),
                           v.get('port'),
                           PublicKey(a2b_base64(v['pubkey'])))
                          for k,v in config.get('servers',{}).items()]
     if not 'authkey' in config:
       raise ValueError("authkey for threshold setup missing config")
-    config['authkey']=binascii.a2b_base64(config['authkey']+'==')
+    config['authkey']=a2b_base64(config['authkey']+'==')
 
   with open(config['key'],'rb') as fd:
     config['key']=KeyPair.from_bytes(a2b_base64(fd.read()))
 
   return config
-
-class NoiseWrapperServer():
-   def __init__(self, fd):
-      global config
-      self.fd = fd
-      protocol = NoiseProtocolFactory().get_noise_protocol('Noise_XK_25519_ChaChaPoly_BLAKE2b')
-      handshakestate = protocol.create_handshakestate()
-
-      # initialize handshakestate objects
-      handshakestate.initialize(XKHandshakePattern(), False, b'', s=config['noise_key'])
-
-      # step 1, wait for initial message
-      message_buffer = fd.recv(48)
-      handshakestate.read_message(bytes(message_buffer), bytearray())
-
-      # step 2, respond
-      message_buffer = bytearray()
-      handshakestate.write_message(b'', message_buffer)
-      fd.sendall(message_buffer)
-
-      # step 3, finish of
-      message_buffer = fd.recv(64)
-      self.state = handshakestate.read_message(bytes(message_buffer), bytearray())
-
-   def send(self, data):
-      return self.sendall(data)
-
-   def close(self):
-      self.fd.close()
-
-   def shutdown(self, param):
-      self.fd.shutdown(param)
-
-   def sendall(self, pkt):
-      ct = self.state[1].encrypt_with_ad(b'', pkt)
-      msg = struct.pack(">H", len(ct)) + ct
-      self.fd.sendall(msg)
-
-   def read_pkt(self,size):
-      res = []
-      read = 0
-      plen = self.fd.recv(2)
-      if len(plen)!=2:
-          raise ValueError
-      plen = struct.unpack(">H", plen)[0]
-      while read<plen or len(res[-1])==0:
-        res.append(self.fd.recv(plen-read))
-        read+=len(res[-1])
-      return self.state[0].decrypt_with_ad(b'', b''.join(res))
 
 def fail(s):
   if config['verbose']:
@@ -238,6 +127,7 @@ def handler(conn):
 def main():
     global config
     config = processcfg(getcfg('opaque-stored'))
+    toprf.config = config
 
     socket.setdefaulttimeout(config['timeout'])
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -277,7 +167,7 @@ def main():
 
             pid=os.fork()
             if pid==0:
-              conn = NoiseWrapperServer(conn)
+              conn = NoiseWrapperServer(conn, config['noise_key'])
               try:
                 handler(conn)
               except:
@@ -303,4 +193,3 @@ def main():
 
 if __name__ == '__main__':
   main()
-

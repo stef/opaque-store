@@ -10,9 +10,10 @@ from SecureString import clearmem
 from binascii import unhexlify, a2b_base64, b2a_base64
 from dissononce.dh.x25519.keypair import KeyPair
 from dissononce.dh.x25519.public import PublicKey
-from opaquestore.noiseclient import NoiseWrapper
+from opaquestore.noiseclient import NoiseClientWrapper
 from opaquestore import server
 from opaquestore import genkey
+from klutshnik.utils import getcfg
 
 #### consts ####
 
@@ -44,25 +45,7 @@ def getpwd():
   else:
     return sys.stdin.buffer.readline().rstrip(b'\n')
 
-def getcfg():
-  paths=[
-      # read global cfg
-      '/etc/opaque-store/config',
-      # update with per-user configs
-      os.path.expanduser("~/.opaque-storerc"),
-      # over-ride with local directory config
-      os.path.expanduser("~/.config/opaque-store/config"),
-      os.path.expanduser("opaque-store.cfg")
-  ]
-  config = dict()
-  for path in paths:
-    try:
-        with open(path, "rb") as f:
-            data = tomllib.load(f)
-    except FileNotFoundError:
-        continue
-    config.update(data)
-
+def processcfg(config):
   config['noise_key']=KeyPair.from_bytes(a2b_base64(config['noise_key']+'=='))
   config['server_pubkey']=PublicKey(a2b_base64(config['server_pubkey']+'=='))
   return config
@@ -135,7 +118,7 @@ def test_pwd(pwd):
 
 def main(params=sys.argv):
   global config
-  config = getcfg()
+  config = processcfg(getcfg('opaque-store'))
 
   if len(params) < 2: usage(params, True)
   cmd = None
@@ -172,7 +155,7 @@ def main(params=sys.argv):
   s = None
   pwd = ''
   try:
-    s = NoiseWrapper.connect(config['address'], config['port'], config['noise_key'], config['server_pubkey'])
+    s = NoiseClientWrapper.connect(config['address'], config['port'], config['noise_key'], config['server_pubkey'])
     ret = cmd(s, *args)
   except Exception as exc:
     error = exc
