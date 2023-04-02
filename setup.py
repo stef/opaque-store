@@ -16,7 +16,7 @@ def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 setup(name = 'opaquestore',
-      version = '0.0.4',
+      version = '0.0.5',
       description = 'Simple Online secret-storage based on the OPAQUE protocol',
       license = "GPLv3",
       author = 'Stefan Marsiske',
