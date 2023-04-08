@@ -9,7 +9,7 @@ from dissononce.dh.x25519.public import PublicKey
 from binascii import a2b_base64, b2a_base64
 from klutshnik.utils import getcfg
 from opaquestore import toprf
-from opaquestore.noiseclient import NoiseWrapperServer
+from opaquestore import noiseclient
 
 config = None
 
@@ -167,7 +167,7 @@ def main():
 
             pid=os.fork()
             if pid==0:
-              conn = NoiseWrapperServer(conn, config['noise_key'])
+              conn = noiseclient.NoiseWrapperServer(conn, config['noise_key'])
               try:
                 handler(conn)
               except:

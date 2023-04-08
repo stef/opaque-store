@@ -33,7 +33,7 @@ setup(name = 'opaquestore',
                      ],
       entry_points = {
           'console_scripts': [
-              'opaquestore = opaquestore.opaquestore:main'
+              'opaquestore = opaquestore.client:main'
           ],
       },
 )
