@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# SPDX-FileCopyrightText: 2023, Marsiske Stefan
+# SPDX-FileCopyrightText: 2024, Marsiske Stefan
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import os
@@ -16,24 +16,24 @@ def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 setup(name = 'opaquestore',
-      version = '0.0.6',
+      version = '0.1.0',
       description = 'Simple Online secret-storage based on the OPAQUE protocol',
-      license = "GPLv3",
-      author = 'Stefan Marsiske',
+       license = "GPLv3",
+       author = 'Stefan Marsiske',
       author_email = 'opaque@ctrlc.hu',
       url = 'https://github.com/stef/opaque-store/',
-      long_description=read('README.org'),
-      long_description_content_type="text/markdown",
+       long_description=read('README.md'),
+       long_description_content_type="text/markdown",
       packages = ['opaquestore'],
-      install_requires = ("pysodium", "SecureString", "opaque","zxcvbn-python", 'dissononce'),
-      classifiers = ["Development Status :: 4 - Beta",
-                     "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
-                     "Topic :: Security :: Cryptography",
-                     "Topic :: Security",
-                     ],
-      entry_points = {
-          'console_scripts': [
+      install_requires = ("pysodium", "SecureString", "opaque","zxcvbn-python", 'pyoprf'),
+       classifiers = ["Development Status :: 4 - Beta",
+                      "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+                      "Topic :: Security :: Cryptography",
+                      "Topic :: Security",
+                   ],
+       entry_points = {
+           'console_scripts': [
               'opaquestore = opaquestore.client:main'
-          ],
-      },
+           ],
+       },
 )
