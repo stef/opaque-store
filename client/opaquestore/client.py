@@ -137,7 +137,7 @@ def opaque_session(s, pwdU, keyid, op, force=False):
 
   indexes = bytes([i+1 for i,r in enumerate(ke2s) if r is not None])
   resps = b''.join(r for r in ke2s if r is not None)
-  opaque.CombineCredentialResponses(config['threshold'], len(indexes), indexes, resps)
+  beta = opaque.CombineCredentialResponses(config['threshold'], len(indexes), indexes, resps)
 
   auths = []
   export_keys = []
@@ -146,7 +146,7 @@ def opaque_session(s, pwdU, keyid, op, force=False):
     ke2 = ke2s[i]
     ## user recovers its credentials from the servers response
     try:
-      sk, authU, export_key = opaque.RecoverCredentials(ke2, secs[i], b"opaque-store", opaque.Ids(None, None))
+      sk, authU, export_key = opaque.RecoverCredentials(ke2, secs[i], b"opaque-store", opaque.Ids(None, None), beta)
     except:
       print(f'{s[i].name} ({s[i].address[0]}): {attempts.get(i, '?')} attempts left', file=sys.stderr)
       raise ValueError(f"opaque failed, possibly wrong password?")
@@ -183,8 +183,12 @@ def dkg(m, threshold):
          raise ValueError(f"long-term signature key for server {name} is of incorrect size")
        peer_lt_pks.append(peer_lt_pk)
 
+   zero_shares = pyoprf.create_shares(bytes([0]*32), n, config['threshold'])
+
    tp, msg0 = pyoprf.tpdkg_start_tp(n, threshold, config['ts_epsilon'], "threshold opaque dkg create k", peer_lt_pks)
    m.broadcast(msg0)
+   for i in range(n):
+     m.send(i, zero_shares[i])
 
    while pyoprf.tpdkg_tp_not_done(tp):
      cur_step = tp[0].step
@@ -249,12 +253,14 @@ def create(s, pwdU, keyid, data):
 
   if op == CREATE_DKG:
     # combine shares into beta
-    opaque.CombineRegistrationResponses(config['threshold'], len(resps), b''.join(resps))
+    tmp = b''.join(resps)
+    opaque.CombineRegistrationResponses(config['threshold'], len(resps), tmp)
+    resps = split_by_n(tmp, opaque.OPAQUE_REGISTER_PUBLIC_LEN)
 
   recs=[]
   blobs=[]
   for i, peer in enumerate(s):
-    pub = resps[i]
+    pub = bytes(resps[i])
     if pub is None:
         raise ValueError("oracle failed to create registration response")
     #print("received pub:", len(pub), opaque.OPAQUE_REGISTER_PUBLIC_LEN, pub.hex())

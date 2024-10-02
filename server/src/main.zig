@@ -576,6 +576,16 @@ fn opaque_session(cfg: *const Config, s: *sslStream, req: *const OpaqueReq, sk: 
     };
     defer s_allocator.free(rec);
 
+    var zero: ?[]u8 = null;
+    if(load_blob(s_allocator, cfg, local_hexid, "zero", toprf.TOPRF_Share_BYTES)) |b| {
+        zero = b;
+    } else |e| {
+        if(e != error.FileNotFound) {
+            warn("loading record for {s} failed {}\n", .{local_hexid, e});
+            fail(s, cfg);
+        }
+    }
+
     const ids : o.Opaque_Ids = .{
         .idU_len = 0,
         .idU = null,
@@ -586,9 +596,40 @@ fn opaque_session(cfg: *const Config, s: *sslStream, req: *const OpaqueReq, sk: 
     var ke2 = [_]u8{0} ** o.OPAQUE_SERVER_SESSION_LEN;
     var _sk = [_]u8{0} ** o.OPAQUE_SHARED_SECRETBYTES;
     var authU = [_]u8{0} ** sodium.crypto_auth_hmacsha512_BYTES;
-    if(0!=o.opaque_CreateCredentialResponse(req.ke1[0..].ptr, rec.ptr, &ids, ctx.ptr, ctx.len, ke2[0..].ptr, _sk[0..].ptr, authU[0..].ptr)) {
-        warn("failed to create credential response\n",.{});
+
+    if(zero) |z| {
+        defer s_allocator.free(z);
+        var ssid_S = [_]u8{0} ** (14 + sodium.crypto_core_ristretto255_BYTES);
+        @memcpy(ssid_S[0..14], "OPAQUE session"[0..]);
+        @memcpy(ssid_S[14..], req.ke1[0..sodium.crypto_core_ristretto255_BYTES]);
+        if(DEBUG) {
+            warn("zero: ",.{});
+            utils.hexdump(z[0..]);
+            warn("ssid_S: ",.{});
+            utils.hexdump(ssid_S[0..]);
+        }
+        if(0!=o.opaque_CreateCredentialResponse_core(req.ke1[0..].ptr,
+                                                     rec.ptr,
+                                                     &ids,
+                                                     ctx.ptr, ctx.len,
+                                                     z[0..].ptr,
+                                                     ssid_S[0..].ptr, ssid_S[0..].len,
+                                                     ke2[0..].ptr,
+                                                     _sk[0..].ptr,
+                                                     authU[0..].ptr)) {
+            warn("failed to create credential response\n",.{});
+        }
+    } else {
+        if(0!=o.opaque_CreateCredentialResponse(req.ke1[0..].ptr,
+                                                rec.ptr, &ids,
+                                                ctx.ptr, ctx.len,
+                                                ke2[0..].ptr,
+                                                _sk[0..].ptr,
+                                                authU[0..].ptr)) {
+            warn("failed to create credential response\n",.{});
+        }
     }
+
     if(sk) |dst| {
         @memcpy(dst, _sk[0..].ptr);
     }
@@ -659,6 +700,7 @@ fn create(cfg: *const Config, s: *sslStream, req: *const CreateReq, op : OpaqueS
 
     var _sec = [_]u8{0} ** o.OPAQUE_REGISTER_SECRET_LEN;
     var _pub = [_]u8{0} ** o.OPAQUE_REGISTER_PUBLIC_LEN;
+    var zero = [_]u8{0} ** toprf.TOPRF_Share_BYTES;
 
     if(op == OpaqueStoreOp.CREATE_DKG) {
         var msg0 = mem.zeroes([tp_dkg.tpdkg_msg0_SIZE]u8);
@@ -668,18 +710,35 @@ fn create(cfg: *const Config, s: *sslStream, req: *const CreateReq, op : OpaqueS
         if(msg0len != msg0.len) {
             fail(s, cfg);
         }
+        const zerolen = s.read(zero[0..]) catch |err| {
+            handle_read_err(err, s);
+        };
+        if(zerolen != zero.len) {
+            fail(s, cfg);
+        }
 
         var keygen_ctx: CB_Ctx = .{
             .cfg = cfg,
             .s = s,
             .msg0 = &msg0
         };
-        if(0!=o.opaque_CreateRegistrationResponse_extKeygen(req.alpha[0..].ptr,
-                                                            null,
-                                                            _sec[0..].ptr,
-                                                            _pub[0..].ptr,
-                                                            keygen_cb,
-                                                            &keygen_ctx)) {
+        var ssid_S = [_]u8{0} ** (13 + sodium.crypto_core_ristretto255_BYTES);
+        @memcpy(ssid_S[0..13], "OPAQUE create"[0..]);
+        @memcpy(ssid_S[13..], req.alpha[0..]);
+        if(DEBUG) {
+            warn("zero: ",.{});
+            utils.hexdump(zero[0..]);
+            warn("ssid_S: ",.{});
+            utils.hexdump(ssid_S[0..]);
+        }
+        if(0!=o.opaque_CreateRegistrationResponse_core(req.alpha[0..].ptr,
+                                                       null,
+                                                       keygen_cb,
+                                                       &keygen_ctx,
+                                                       zero[0..].ptr,
+                                                       ssid_S[0..].ptr, ssid_S.len,
+                                                       _sec[0..].ptr,
+                                                       _pub[0..].ptr)) {
             fail(s,cfg);
         }
     } else {
@@ -715,6 +774,9 @@ fn create(cfg: *const Config, s: *sslStream, req: *const CreateReq, op : OpaqueS
 
     save_blob(cfg, hexid, "rec", rec[0..]) catch fail(s, cfg);
     save_blob(cfg, hexid, "blob", blob[0..]) catch fail(s, cfg);
+    if(op == OpaqueStoreOp.CREATE_DKG) {
+        save_blob(cfg, hexid, "zero", zero[0..]) catch fail(s, cfg);
+    }
 
     _ = s.write("ok") catch |e| {
         warn("error: {}\n", .{e});
