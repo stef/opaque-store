@@ -76,6 +76,12 @@ class TestEndToEnd(unittest.TestCase):
         with connect() as s:
             self.assertTrue(client.create(s, pwd, keyid, data))
 
+    def test_create_2x(self):
+        with connect() as s:
+            self.assertTrue(client.create(s, pwd, keyid, data))
+        with connect() as s:
+            self.assertRaises(ValueError, client.create, s, pwd, keyid, data)
+
     def test_get(self):
         with connect() as s:
             self.assertTrue(client.create(s, pwd, keyid, data))
@@ -83,6 +89,17 @@ class TestEndToEnd(unittest.TestCase):
             res = client.get(s, pwd, keyid)
         self.assertIsInstance(res, str)
         self.assertEqual(res.encode('utf8'),data)
+
+    def test_invalid_pwd(self):
+        with connect() as s:
+            self.assertTrue(client.create(s, pwd, keyid, data))
+
+        with connect() as s:
+            self.assertRaises(ValueError, client.get, s, otherpwd, keyid)
+
+    def test_invalid_keyid(self):
+        with connect() as s:
+            self.assertRaises(ValueError, client.get, s, pwd, keyid)
 
     def test_update(self):
         with connect() as s:
@@ -101,6 +118,18 @@ class TestEndToEnd(unittest.TestCase):
         self.assertIsInstance(res1, str)
         self.assertEqual(res1.encode('utf8'),updated)
 
+    def test_update_invalid_pwd(self):
+        with connect() as s:
+            self.assertTrue(client.create(s, pwd, keyid, data))
+        with connect() as s:
+            res = client.get(s, pwd, keyid)
+        self.assertIsInstance(res, str)
+        self.assertEqual(res.encode('utf8'),data)
+
+        updated = b"updated blob"
+        with connect() as s:
+            self.assertRaises(ValueError, client.update, s, otherpwd, keyid, updated)
+
     def test_delete(self):
         with connect() as s:
             self.assertTrue(client.create(s, pwd, keyid, data))
@@ -110,6 +139,25 @@ class TestEndToEnd(unittest.TestCase):
 
         with connect() as s:
             self.assertRaises(ValueError, client.get, s, pwd, keyid)
+
+    def test_delete_invalid_pwd(self):
+        with connect() as s:
+            self.assertTrue(client.create(s, pwd, keyid, data))
+
+        with connect() as s:
+            self.assertRaises(ValueError, client.delete, s, otherpwd, keyid)
+
+    def test_reset_fails(self):
+        with connect() as s:
+            self.assertTrue(client.create(s, pwd, keyid, data))
+
+        with connect() as s:
+             self.assertRaises(ValueError, client.get, s, otherpwd, keyid)
+
+        with connect() as s:
+            res = client.get(s, pwd, keyid)
+        self.assertIsInstance(res, str)
+        self.assertEqual(res.encode('utf8'),data)
 
     def test_lock(self):
         with connect() as s:
@@ -124,6 +172,22 @@ class TestEndToEnd(unittest.TestCase):
         with connect() as s:
             self.assertRaises(ValueError, client.get, s, pwd, keyid)
 
+    def test_get_rtoken(self):
+        with connect() as s:
+            self.assertTrue(client.create(s, pwd, keyid, data))
+
+        # get recovery token
+        with connect() as s:
+            rtoken = client.get_recovery_tokens(s, pwd, keyid)
+        self.assertIsInstance(rtoken, str)
+
+    def test_get_rtoken_invalid_pwd(self):
+        with connect() as s:
+            self.assertTrue(client.create(s, pwd, keyid, data))
+
+        # get recovery token
+        with connect() as s:
+            self.assertRaises(ValueError, client.get_recovery_tokens, s, otherpwd, keyid)
 
     def test_unlock(self):
         with connect() as s:
@@ -152,6 +216,32 @@ class TestEndToEnd(unittest.TestCase):
             res = client.get(s, pwd, keyid)
         self.assertIsInstance(res, str)
         self.assertEqual(res.encode('utf8'),data)
+
+    def test_unlock_invalid_rtoken(self):
+        with connect() as s:
+            self.assertTrue(client.create(s, pwd, keyid, data))
+
+        # get recovery token
+        with connect() as s:
+            rtoken = client.get_recovery_tokens(s, pwd, keyid)
+        self.assertIsInstance(rtoken, str)
+
+        # lock it
+        for _ in range(3):
+            with connect() as s:
+                self.assertRaises(ValueError, client.get, s, otherpwd, keyid)
+
+        # check that it is locked
+        with connect() as s:
+            self.assertRaises(ValueError, client.get, s, pwd, keyid)
+
+        # unlock it
+        with connect() as s:
+          self.assertRaises(ValueError, client.unlock, s, rtoken[::-1], keyid)
+
+        # check success of unlocking
+        with connect() as s:
+            self.assertRaises(ValueError, client.get, s, pwd, keyid)
 
 if __name__ == '__main__':
   unittest.main()
