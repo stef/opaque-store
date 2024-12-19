@@ -353,14 +353,42 @@ def unlock(s, pwdU, keyid):
       raise ValueError(f"oracle ({s[i].name} @{s[i].address[0]}) failed to acknowledge success")
   return True
 
+def genltsigkey(skpath=None, pkpath=None):
+  if skpath is None:
+    server_config = getcfg('opaque-stored')['server']
+
+  if skpath is None:
+    skpath = server_config['ltsigkey']
+
+  if pkpath is None:
+    pkpath = f"{skpath}.pub"
+
+  if os.path.exists(skpath):
+    print(f"{skpath} exists, refusing to overwrite, if you want to generate a new one, delete the old one first. aborting")
+    return 1
+  if os.path.exists(pkpath):
+    print(f"{pkpath} exists, refusing to overwrite, if you want to generate a new one, delete the old one first. aborting")
+    return 1
+
+  pk, sk = pysodium.crypto_sign_keypair()
+  with open(skpath, 'wb') as fd:
+    fd.write(sk)
+  with open(pkpath, 'wb') as fd:
+    fd.write(pk)
+  print(f"wrote secret-key to {skpath} and public-key to {pkpath}.")
+
 def usage(params, help=False):
   print("usage: %s " % params[0])
+  print("     %s genltsigkey [private-key path] [public-key path]" % params[0])
   print("      echo -en 'password\\ntoken2store' | %s create <keyid>" % params[0])
   print("                    echo -n 'password' | %s get <keyid>" % params[0])
   print("     echo -en 'password\\ntoken2update' | %s update <keyid>" % params[0])
   print("     echo -en 'password\\ntoken2update' | %s force-update <keyid>" % params[0])
   print("                    echo -n 'password' | %s delete <keyid>" % params[0])
   print("                    echo -n 'password' | %s force-delete <keyid>" % params[0])
+  print("                    echo -n 'password' | %s recovery-tokens <keyid>" % params[0])
+  print("              echo -n <recovery-token> | %s unlock <keyid>" % params[0])
+
   if help: sys.exit(0)
   sys.exit(100)
 
@@ -385,6 +413,7 @@ cmds = {'create': create,
         'force-delete': delete,
         'recovery-tokens': get_recovery_tokens,
         'unlock': unlock,
+        'genltsigkey': genltsigkey,
         }
 
 def main(params=sys.argv):
@@ -395,9 +424,6 @@ def main(params=sys.argv):
   #fdopen.restype = ctypes.c_void_p
   #log_file.value = fdopen(2, 'w')
 
-  global config
-  config = processcfg(getcfg('opaque-store'))
-
   if len(params) < 2: usage(params, True)
   cmd = None
   args = []
@@ -406,6 +432,12 @@ def main(params=sys.argv):
 
   if params[1] not in cmds:
     usage(params)
+
+  if params[1] == "genltsigkey":
+      sys.exit(genltsigkey(*params[2:]))
+
+  global config
+  config = processcfg(getcfg('opaque-store'))
 
   if len(params) != 3: usage(params)
   pwd = getpwd()
