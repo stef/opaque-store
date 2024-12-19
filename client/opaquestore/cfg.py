@@ -8,14 +8,14 @@ def split_by_n(obj, n):
   # src https://stackoverflow.com/questions/9475241/split-string-every-nth-character
   return [obj[i:i+n] for i in range(0, len(obj), n)]
 
-def getcfg(name, cwd=""):
+def getcfg(name, cwd="."):
   paths=[
       # read global cfg
       f'/etc/{name}/config',
       # update with per-user configs
       os.path.expanduser(f"~/.{name}rc"),
-      # over-ride with local directory config
       os.path.expanduser(f"~/.config/{name}/config"),
+      # over-ride with local directory config
       os.path.expanduser('/'.join([cwd,f"{name}.cfg"]))
   ]
   config = dict()
