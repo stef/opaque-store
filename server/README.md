@@ -6,7 +6,7 @@ you need to install
  - liboprf https://github.com/stef/liboprf/ 
  - libopaque https://github.com/stef/libopaque/
 
-on debian you can install the -dev packages.
+on debian (unstable) you can install the -dev packages.
 
 # Building
 
