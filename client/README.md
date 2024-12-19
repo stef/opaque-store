@@ -3,71 +3,101 @@
 This is a simple client-server system, which implements a simple online storage
 of blobs, which can be recovered using only a password.
 
-You might want to read this blogpost on this topic and on more info:
+You might want to read this blog-post on this topic and on more info:
 `https://www.ctrlc.hu/~stef/blog/posts/How_to_recover_static_secrets_using_OPAQUE.html`
 
 ## Installation
 
 opaquestore depends on https://github.com/stef/libopaque/ which in turn
-depends on libsodium and liboprf, and pyoprf.
+depends on libsodium, liboprf, and pyoprf.
 
-When you have libopaque, a simple `pip install opaquestore` should get you started.
+When you have a working libopaque, a simple `pip install opaquestore`
+should get you started.
 
-## Configfiles
+## Configuration files
 
 For an example and documentation on the values in the config files
-see: opaque-store.cfg for the client config, and opaque-stored.cfg for
-the server config.
+see: `opaque-store.cfg` for the client configuration, and
+`opaque-stored.cfg` for the server configuration.
 
 ## Command-line usage and examples
 
+It is warmly recommended to use pwdsphinx as a front-end to
+opaquestore, since it handles passwords in a most secure manner. If
+you want to use a different password manager, you can use the CLI
+interface documented below.
+
 ### Passwords and Records
 
-opaquestore takes the password always on the standard input. If you are
-createing or updating a record, the record itself is also expected on the
-standard input. The password and the optional record are separated by a newline
-character.
+opaquestore takes the password always on the standard input. If you
+are creating or updating a record, the record itself is also expected
+on the standard input. The password and the record - if required - are
+separated by a newline character.
 
 ### Keyids
 
 Keyids are the identifiers that you use to address your records, they can be
-anything.
+any kind of string.
 
 ### Store a new record
+
+Storing a record needs 3 parameters:
+ - the password, on standard input, terminated by a newline.
+ - the record itself until the end of the standard input
+ - and a keyid with which you can reference and act on this record
 
 ```sh
 $ echo -en 'password\ntoken2store' | opaquestore create <keyid>
 ```
 
-example:
+Here is a contrived example:
 
 ```
-echo -en "mypassword\!sMyV0ice\nmy secretty token data that i need to protect and store using opaque" | opaquestore create cfba1e747f706b542451a9d5404346f8
+echo -en "mypassword\!sMyV0ice\nmy secretty token data that i need to protect and store using opaque" | opaquestore create myfirstblob
 ```
 
-the password and the blob are expected on stdin, in this order,
-seperated by a newline. The second parameter to the client is an ID
-used to refer to the blob.
+In this example:
+ - the password is "mypassword!sMyV0ice"
+ - the record is: "my secretty token data that i need to protect and store using opaque"
+ - and the keyid is "myfirstblob"
 
 ### Get a record
+
+Retrieving a record has to parameters:
+
+ - the password on standard input
+ - the keyid as the 2nd parameter to `opaquestore`
 
 ```sh
 $ echo -n 'password' | opaquestore get <keyid>
 ```
 
-example:
+An example fetching the record created in the previous example:
 
 ```
-echo -en "mypassword\!sMyV0ice" | opaquestore get cfba1e747f706b542451a9d5404346f8
+echo -en "mypassword\!sMyV0ice" | opaquestore get myfirstblob
 ```
-The password is again supplied on stdin, and the same ID as used for
-creation is used as reference.
 
 ### Update a record
+
+It is possible to update a record in place, it is essentially the same
+as the creation of a record. It is important to note, that this
+operation only succeeds, if all servers need to process this request,
+not only those needed for matching the threshold, you want to update
+the record on all servers not just some.
+
 
 ```sh
 $ echo -en 'password\ntoken2update' | opaquestore update <keyid>
 ```
+
+If you do not care if some servers will not be updated and you really
+know what you are doing, you can use the alternative command
+`force-update`, in this case the operation will succeed if at least
+the threshold is matched. Note however if any of the servers that did
+not participate in the forced update will participate in later
+operations will corrupt later operations, so you might want to remove
+those servers from your config.
 
 ```sh
 $ echo -en 'password\ntoken2update' | opaquestore force-update <keyid>
@@ -75,9 +105,19 @@ $ echo -en 'password\ntoken2update' | opaquestore force-update <keyid>
 
 ### Delete a record
 
+Deleting a record is very straight forward, you need your password and
+keyid, and ensure that all servers that store this record will all be
+available. The operation will fail if some servers are not available.
+
 ```sh
 $ echo -n 'password' | opaquestore delete <keyid>
 ```
+
+Similarly to the update operation there is also a forced delete
+operation, which will succeed if at least the threshold is
+matched. Servers not available during this forced delete will still
+hold the record, if your setup has a n-out-of-2*n setup could mean
+that you still have enough shares even after a forced-delete.
 
 ```sh
 $ echo -n 'password' | opaquestore force-delete <keyid>
@@ -85,22 +125,32 @@ $ echo -n 'password' | opaquestore force-delete <keyid>
 
 ### Get some recovery-tokens
 
+An attacker might be trying different passwords for your record, after
+a certain amount of consecutive password failures (by default 3) the
+server locks down the record. A locked record can only be unlocked
+with a recovery-token. It is not possible to ask for recovery-tokens
+when a record is already locked.
+
 ```sh
 $ echo -n 'password' | opaquestore recovery-tokens <keyid>
 ```
 
 ### Unlock a locked record using a recovery token
 
+If a record is locked, and you have a valid recovery-token you can
+reset the failure counter:
+
 ```sh
 $ echo -n <recovery-token> | opaquestore unlock <keyid>
 ```
+
 
 ### Generate long-term signature keys
 
 If you run server, you need to generate some long-term signing keys if you want
 to use this server in a threshold setup. If you don't provide the path to the
 keys, the secret-key will be taken from the `ltsigkey` config value in your
-opaque-storaged configuration, and the public-key will be the same as the
+`opaque-storaged` configuration, and the public-key will be the same as the
 secret-key, but with a `.pub` extension.
 
 ```
