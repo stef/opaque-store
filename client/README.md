@@ -17,8 +17,31 @@ should get you started.
 ## Configuration files
 
 For an example and documentation on the values in the config files
-see: `opaque-store.cfg` for the client configuration, and
-`opaque-stored.cfg` for the server configuration.
+see: `opaque-store.cfg` for the client configuration, and - in case
+you want to run your own server(s) - `opaque-stored.cfg` for the
+server configuration.
+
+## Threshold setup
+
+The client config file, contains a `[servers]` section which lists all
+servers you want to use in a threshold setup. Each server has an
+`address`, `port` and `ltsigkey` variable that needs to be set
+accordingly.  In case your server runs with a self-signed certificate
+there is a `ssl_cert` variable that can pin it to the correct cert.
+It is also important to note, that the name of the server - which is
+given after a dot in the `[servers.name]` sub-section title is also
+used to generate record ids specific to that server. Thus once chosen,
+it should not change, unless you want to lose access to the records on
+that server. The name doesn't have to be unique by users, but should
+be unique among all configured servers in this setup, this guarantees
+that for a record each server has a different record it and thus makes
+the records unlinkable across servers.
+
+In the config files `[client]` section the `threshold` variable
+specifies the threshold for the setup.
+
+The minimum sane configuration for a threshold setup is `threshold=2`
+with at least 3 servers listed.
 
 ## Command-line usage and examples
 
@@ -34,20 +57,26 @@ are creating or updating a record, the record itself is also expected
 on the standard input. The password and the record - if required - are
 separated by a newline character.
 
-### Keyids
+### KeyIds
 
-Keyids are the identifiers that you use to address your records, they can be
-any kind of string.
+KeyIds are the identifiers that you use to address your records, they
+can be any kind of string. Internally this keyId is hashed using the
+`id_salt` from the configurations `[client]` section into a unique
+identifier. It is very warmly recommended to set this to some random
+value, and to back this value up. As this salt is necessary to access
+your records. If you use a commonly used salt (i.e. the default salt)
+chances are high that there are collisions for record ids, and that
+people can guess your record ids.
 
 ### Store a new record
 
 Storing a record needs 3 parameters:
  - the password, on standard input, terminated by a newline.
  - the record itself until the end of the standard input
- - and a keyid with which you can reference and act on this record
+ - and a keyId with which you can reference and act on this record
 
 ```sh
-$ echo -en 'password\ntoken2store' | opaquestore create <keyid>
+$ echo -en 'password\ntoken2store' | opaquestore create <keyId>
 ```
 
 Here is a contrived example:
@@ -59,17 +88,17 @@ echo -en "mypassword\!sMyV0ice\nmy secretty token data that i need to protect an
 In this example:
  - the password is "mypassword!sMyV0ice"
  - the record is: "my secretty token data that i need to protect and store using opaque"
- - and the keyid is "myfirstblob"
+ - and the keyId is "myfirstblob"
 
 ### Get a record
 
 Retrieving a record has to parameters:
 
  - the password on standard input
- - the keyid as the 2nd parameter to `opaquestore`
+ - the keyId as the 2nd parameter to `opaquestore`
 
 ```sh
-$ echo -n 'password' | opaquestore get <keyid>
+$ echo -n 'password' | opaquestore get <keyId>
 ```
 
 An example fetching the record created in the previous example:
@@ -88,7 +117,7 @@ the record on all servers not just some.
 
 
 ```sh
-$ echo -en 'password\ntoken2update' | opaquestore update <keyid>
+$ echo -en 'password\ntoken2update' | opaquestore update <keyId>
 ```
 
 If you do not care if some servers will not be updated and you really
@@ -100,17 +129,17 @@ operations will corrupt later operations, so you might want to remove
 those servers from your config.
 
 ```sh
-$ echo -en 'password\ntoken2update' | opaquestore force-update <keyid>
+$ echo -en 'password\ntoken2update' | opaquestore force-update <keyId>
 ```
 
 ### Delete a record
 
 Deleting a record is very straight forward, you need your password and
-keyid, and ensure that all servers that store this record will all be
+keyId, and ensure that all servers that store this record will all be
 available. The operation will fail if some servers are not available.
 
 ```sh
-$ echo -n 'password' | opaquestore delete <keyid>
+$ echo -n 'password' | opaquestore delete <keyId>
 ```
 
 Similarly to the update operation there is also a forced delete
@@ -120,7 +149,7 @@ hold the record, if your setup has a n-out-of-2*n setup could mean
 that you still have enough shares even after a forced-delete.
 
 ```sh
-$ echo -n 'password' | opaquestore force-delete <keyid>
+$ echo -n 'password' | opaquestore force-delete <keyId>
 ```
 
 ### Get some recovery-tokens
@@ -132,7 +161,7 @@ with a recovery-token. It is not possible to ask for recovery-tokens
 when a record is already locked.
 
 ```sh
-$ echo -n 'password' | opaquestore recovery-tokens <keyid>
+$ echo -n 'password' | opaquestore recovery-tokens <keyId>
 ```
 
 ### Unlock a locked record using a recovery token
@@ -141,7 +170,7 @@ If a record is locked, and you have a valid recovery-token you can
 reset the failure counter:
 
 ```sh
-$ echo -n <recovery-token> | opaquestore unlock <keyid>
+$ echo -n <recovery-token> | opaquestore unlock <keyId>
 ```
 
 
