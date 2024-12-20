@@ -133,7 +133,7 @@ def opaque_session(s, pwdU, keyid, op, force=False):
   elif op == UPDATE and len(missing)>0:
     raise ValueError(f'Update operations require all servers to participate. Aborting. Use force-update to update all available servers.')
   elif (op == GET or force == True) and len(s) - len(missing) < config['threshold']:
-    raise ValueError(f'Less than threshold ({config['threshold']}) number of servers available. Aborting.')
+    raise ValueError(f"Less than threshold ({config['threshold']}) number of servers available. Aborting.")
 
   indexes = bytes([i+1 for i,r in enumerate(ke2s) if r is not None])
   resps = b''.join(r for r in ke2s if r is not None)
