@@ -14,12 +14,60 @@ depends on libsodium, liboprf, and pyoprf.
 When you have a working libopaque, a simple `pip install opaquestore`
 should get you started.
 
-## Configuration files
+## Configuration
 
 For an example and documentation on the values in the config files
 see: `opaque-store.cfg` for the client configuration, and - in case
 you want to run your own server(s) - `opaque-stored.cfg` for the
 server configuration.
+
+Example configuration with inline comments about each value:
+
+```
+[client]
+# you must change this value, it ensures that your record ids are
+# unique you must also make sure to not lose this value, if you do,
+# you lose access to your records.
+id_salt="Please_MUST-be_changed! and backed up to something difficult to guess"
+# the number of servers successfully participating in an
+# operation. must be less than 129, but lower 1 digit number are
+# probable the most robust.
+threshold=2
+# the time in seconds a distributed keygen (DKG) protocol message is
+# considered fresh. anything older than this is considered invalid and
+# aborts a DKG. Higher values help with laggy links, lower values can
+# be fine if you have high-speed connections to all servers.
+ts_epsilon=1200
+
+# the list of servers, must be 1 item, if threshold is 1, or one more
+# than threshold.
+[servers]
+[servers.zero]
+# address of server
+host="127.0.0.1"
+# port where server is running
+port=23000
+# self-signed public key of the server
+# - not needed for proper Lets Encrypt certs
+ssl_cert = "/etc/opaquestore/zero/cert.pem"
+ltsigkey="/etc/opaquestore/zero/zero.pub"
+
+[servers.eins]
+# address of server
+host="127.0.0.1"
+# port where server is running
+port=23001
+# public key of the server
+ltsigkey="/etc/opaquestore/eins/eins.pub"
+
+[servers.dva]
+# address of server
+host="127.0.0.1"
+# port where server is running
+port=23002
+# public key of the server
+ltsigkey="/etc/opaquestore/dva/dva.pub"
+```
 
 ## Threshold setup
 
