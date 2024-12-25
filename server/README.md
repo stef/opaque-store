@@ -1,3 +1,12 @@
+# OPAQUE-Store server
+
+OPAQUE-Store is a simple protocol that allows anyone to store
+encrypted blobs of information online, with only a password needed to
+retrieve the information. As the name implies it uses the OPAQUE
+protocol to do so. OPAQUE-Store uses the `export_key` feature of
+OPAQUE to encrypt the data that is stored on the OPAQUE-Storage
+server.
+
 # Dependencies
 
 you need to install
