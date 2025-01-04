@@ -191,7 +191,7 @@ def dkg(m, threshold):
      m.send(i, zero_shares[i])
 
    while pyoprf.tpdkg_tp_not_done(tp):
-     cur_step = tp[0].step
+     cur_step = pyoprf.tpdkg_tpstate_step(tp)
      ret, sizes = pyoprf.tpdkg_tp_input_sizes(tp)
      #print(f"step: {cur_step} {ret} {sizes}", file=sys.stderr)
      peer_msgs = []
@@ -214,7 +214,7 @@ def dkg(m, threshold):
        out = pyoprf.tpdkg_tp_next(tp, msgs)
      except Exception as e:
        m.close()
-       if tp[0].cheater_len > 0:
+       if pyoprf.tpdkg_tpstate_cheater_len(tp) > 0:
          cheaters, cheats = pyoprf.tpdkg_get_cheaters(tp)
          msg=[f"Warning during the distributed key generation the peers misbehaved: {sorted(cheaters)}"]
          for k, v in cheats:
@@ -225,7 +225,7 @@ def dkg(m, threshold):
          raise ValueError(f"{e} | tp step {cur_step}")
      #print(f"outlen: {len(out)}", file=sys.stderr)
      if(len(out)>0):
-       for i in range(tp[0].n):
+       for i in range(pyoprf.tpdkg_tpstate_n(tp)):
          msg = pyoprf.tpdkg_tp_peer_msg(tp, out, i)
          #print(f"sending({i} {m[i].name}({m[i].address}), {msg.hex()})", file=sys.stderr)
          send_pkt(m, msg, i)
