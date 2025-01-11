@@ -55,7 +55,7 @@ def getpwd():
 
 def processcfg(config):
   servers = config.get('servers',{})
-  config = config['client']
+  config = config.get('client',{})
 
   config['threshold'] = int(config.get('threshold') or "1")
   config['ts_epsilon'] = int(config.get('ts_epsilon') or "1200")
