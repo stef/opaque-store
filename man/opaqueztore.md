@@ -18,12 +18,15 @@ The server runs in the foreground and emits log messages to standard output. If
 you want to run it as a daemon, you should deploy it using service supervision
 tools such as s6, runit or daemontools.
 
-When configured, the server should publish its long-term signing public-key so
-that clients can use it in a threshold setup.
+See `opaque-stored.cfg(5)` man-page for configuration details.
+
+After the configuration of the server, the administrator should
+publish its long-term signing public-key so that clients can use it in
+a threshold setup.
 
 # SECURITY CONSIDERATIONS
 
-You **should** back up your SSL key, `record_salt` configuration value,
+You **SHOULD** back up your SSL key, `record_salt` configuration value,
 ltsigkey and of course all blobs regularly.
 
 # REPORTING BUGS
