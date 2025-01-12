@@ -148,7 +148,8 @@ def opaque_session(s, pwdU, keyid, op, force=False):
     try:
       sk, authU, export_key = opaque.RecoverCredentials(ke2, secs[i], b"opaque-store", opaque.Ids(None, None), beta)
     except:
-      print(f'{s[i].name} ({s[i].address[0]}): {attempts.get(i, '?')} attempts left', file=sys.stderr)
+      print(f'{s[i].name} ({s[i].address[0]}): {attempts.get(i, "?")} attempts left', file=sys.stderr)
+
       raise ValueError(f"opaque failed, possibly wrong password?")
     clearmem(secs[i])
     if op in {GET_RTOKEN}:
