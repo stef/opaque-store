@@ -178,6 +178,34 @@ function of OPAQUE is argon2i, which makes offline bruteforce attacks
 very slow. It is warmly recommended to use strong high-entropy
 passwords that come from a password manager like [SPHINX].
 
+## Threat-model
+
+ 1. OPAQUE-Store does not protect against passwords leaking in any
+    way, bet it shoulder-surfing, accousting side-channels, or
+    key-logging malware.
+
+ 2. OPAQUE-Store protects against passive attackers eavesdropping on
+    communication between the client and the server(s).
+
+ 3. OPAQUE-Store does not protect the encrypted data against a
+    quantum-adversary having access to enough records to reach the
+    threshold, while also having observed at least one registration or
+    AKE flows in plaintext.
+
+  4. OPAQUE-Store protects against online-bruteforce attacks by using
+     a locking mechanism.
+
+  5. OPAQUE-Store does not protect against-offline bruteforce attacks
+     against the password if the attacker has access to enough records
+     to reach the threshold.
+
+  6. Although the threshold setup itself protects the shared OPRF key
+     unconditionally - due to its usage in OPAQUE -, the encrypted
+     data, the password, and by consequence the key itself are only
+     protected computationally.
+
+## References
+
 [JKKX17] "TOPPSS: Cost-minimal Password-Protected Secret Sharing based
 on Threshold OPRF", 2017 by Stanislaw Jarecki, Aggelos Kiayias, Hugo
 Krawczyk, Jiayu Xu
