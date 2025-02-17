@@ -146,7 +146,8 @@ def opaque_session(s, pwdU, keyid, op, force=False):
     ke2 = ke2s[i]
     ## user recovers its credentials from the servers response
     try:
-      sk, authU, export_key = opaque.RecoverCredentials(ke2, secs[i], b"opaque-store", opaque.Ids(None, None), beta)
+      sk, authU, export_key = opaque.RecoverCredentials(ke2, secs[i], b"opaque-store", opaque.Ids(None, None),
+                                                        beta, unlink_masking_key = str(i).encode('utf8'))
     except:
       print(f'{s[i].name} ({s[i].address[0]}): {attempts.get(i, "?")} attempts left', file=sys.stderr)
 
@@ -266,7 +267,8 @@ def create(s, pwdU, keyid, data):
         raise ValueError("oracle failed to create registration response")
     #print("received pub:", len(pub), opaque.OPAQUE_REGISTER_PUBLIC_LEN, pub.hex())
 
-    rec, export_key = opaque.FinalizeRequest(sec, pub, opaque.Ids(None, None))
+    rec, export_key = opaque.FinalizeRequest(sec, pub, opaque.Ids(None, None),
+                                             unlink_masking_key = str(i).encode('utf8'))
 
     recs.append(rec)
     blob = encrypt_blob(export_key[:pysodium.crypto_aead_xchacha20poly1305_ietf_KEYBYTES], data)
