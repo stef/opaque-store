@@ -111,7 +111,7 @@ def opaque_session(s, pwdU, keyid, op, force=False):
   ke1_0, sec_0 = opaque.CreateCredentialRequest_oprf(pwdU)
   secs=[]
   for i, peer in enumerate(s):
-    pkid = pysodium.crypto_generichash(peer.name.encode('utf8') + keyid)
+    pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
 
     ke1, sec = opaque.CreateCredentialRequest_ake(pwdU, sec_0, ke1_0)
     s.send(i, op+pkid+ke1)
@@ -243,7 +243,7 @@ def create(s, pwdU, keyid, data):
   for i, peer in enumerate(s):
     # TODO TBA hashing the peername means that they cannot be changed
     # later maybe hash i instead?
-    pkid = pysodium.crypto_generichash(peer.name.encode('utf8') + keyid)
+    pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
     s.send(i, op+pkid+req)
 
   if op == CREATE_DKG:
@@ -346,7 +346,7 @@ def get_recovery_tokens(s, pwdU, keyid):
 def unlock(s, pwdU, keyid):
   tokens = split_by_n(a2b_base64(pwdU), 16)
   for i, peer in enumerate(s):
-    pkid = pysodium.crypto_generichash(peer.name.encode('utf8') + keyid)
+    pkid = pysodium.crypto_generichash(str(i).encode('utf8') + keyid)
     s.send(i, UNLOCK+pkid+bytes(tokens[i]))
   oks = s.gather(2)
   for i, ok in enumerate(oks):
