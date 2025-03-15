@@ -1142,13 +1142,15 @@ pub fn main() !void {
         if(srv.accept()) |c| {
             conn = c;
         } else |e| {
-            if(e==error.WouldBlock) {
-                const Status = if (builtin.link_libc) c_int else u32;
-                var status: Status = undefined;
-                const rc = posix.system.waitpid(-1, &status, posix.system.W.NOHANG);
-                if(rc>0) {
-                    kids.remove(mem.asBytes(&rc));
-                    if(cfg.verbose) warn("removing kid {} from pool\n",.{rc});
+            if (e == error.WouldBlock) {
+                while (true) {
+                    const Status = if (builtin.link_libc) c_int else u32;
+                    var status: Status = undefined;
+                    const rc = posix.system.waitpid(-1, &status, posix.system.W.NOHANG);
+                    if (rc > 0) {
+                        kids.remove(mem.asBytes(&rc));
+                        if (cfg.verbose) warn("removing kid {} from pool\n", .{rc});
+                    } else break;
                 }
                 continue;
             }
@@ -1165,6 +1167,7 @@ pub fn main() !void {
         var pid = try posix.fork();
         switch (pid) {
             0 => {
+                setSigHandler();
                 var sc: ssl.c.br_ssl_server_context = undefined;
                 //c.br_ssl_server_init_full_ec(&sc, certs, certs_len, c.BR_KEYTYPE_EC, &sk.key.ec);
                 ssl.c.br_ssl_server_init_minf2c(&sc, certs, certs_len, &sk.key.ec);
@@ -1185,7 +1188,6 @@ pub fn main() !void {
                     }
                 };
                 posix.exit(0);
-
             },
             else => {
                 try kids.insert(mem.asBytes(&pid));
@@ -1193,4 +1195,23 @@ pub fn main() !void {
             },
         }
     }
+}
+
+fn sigHandler(sig: i32) callconv(.C) void {
+    if (sig == std.posix.SIG.PIPE) {
+        std.c._exit(9);
+    }
+}
+
+fn setSigHandler() void {
+    var sa: std.posix.Sigaction = .{
+        .handler = .{ .handler = sigHandler },
+        .mask = std.posix.empty_sigset,
+        .flags = std.posix.SA.RESTART,
+    };
+    std.posix.sigaction(std.posix.SIG.PIPE, &sa, null) catch |err| {
+        //log("failed to install sighandler: {}\n", .{err}, "");
+        warn("failed to install sighandler: {}\n", .{err});
+        posix.exit(99);
+    };
 }
