@@ -130,8 +130,6 @@ fn expandpath(path: []const u8) [:0]u8 {
 }
 
 fn loadcfg() anyerror!Config {
-    @setCold(true);
-
     const home = posix.getenv("HOME") orelse "/nonexistant";
     const cfg1 = mem.concat(allocator, u8, &[_][]const u8{ home, "/.config/opaque-stored/config" }) catch unreachable;
     defer allocator.free(cfg1);
@@ -220,7 +218,6 @@ fn loadcfg() anyerror!Config {
 }
 
 fn fail(s: *sslStream, cfg: *const Config) noreturn {
-    @setCold(true);
     if (cfg.verbose) {
         std.debug.dumpCurrentStackTrace(@frameAddress());
         warn("fail\n", .{});
@@ -912,7 +909,7 @@ fn get_rtoken(cfg: *const Config, s: *sslStream, req: *const OpaqueReq) void {
         }
     }
 
-    var prng = std.rand.DefaultPrng.init(blk: {
+    var prng = std.Random.DefaultPrng.init(blk: {
         var seed: u64 = undefined;
         std.posix.getrandom(std.mem.asBytes(&seed)) catch |e| {
             warn("getrandom returned error: {}\n", .{e});
@@ -1130,8 +1127,8 @@ pub fn main() !void {
     };
 
     const to = posix.timeval{
-        .tv_sec = cfg.timeout,
-        .tv_usec = 0
+        .sec = cfg.timeout,
+        .usec = 0
     };
     try posix.setsockopt(srv.stream.handle, posix.SOL.SOCKET, posix.SO.SNDTIMEO, mem.asBytes(&to));
     try posix.setsockopt(srv.stream.handle, posix.SOL.SOCKET, posix.SO.RCVTIMEO, mem.asBytes(&to));
@@ -1209,9 +1206,5 @@ fn setSigHandler() void {
         .mask = std.posix.empty_sigset,
         .flags = std.posix.SA.RESTART,
     };
-    std.posix.sigaction(std.posix.SIG.PIPE, &sa, null) catch |err| {
-        //log("failed to install sighandler: {}\n", .{err}, "");
-        warn("failed to install sighandler: {}\n", .{err});
-        posix.exit(99);
-    };
+    std.posix.sigaction(std.posix.SIG.PIPE, &sa, null);
 }

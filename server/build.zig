@@ -15,14 +15,17 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
+    const pie = b.option(bool, "pie", "Build a Position Independent Executable") orelse true;
+    const relro = b.option(bool, "relro", "Force all relocations to be read-only after processing") orelse true;
+
     // load the "zig-toml" dependency from build.zig.zon
-    const toml_package = b.dependency("zig-toml", .{
+    const toml_package = b.dependency("zig_toml", .{
         .target = target,
         .optimize = optimize,
     });
     const toml_module = toml_package.module("toml");
 
-    const bearssl_package = b.dependency("zig-bearssl", .{
+    const bearssl_package = b.dependency("zig_bearssl", .{
         .target = target,
         .optimize = optimize,
     });
@@ -33,19 +36,29 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
+        .linkage = .static,
     });
+
+    exe.pie = pie;
+    exe.link_z_relro = relro;
+    exe.bundle_compiler_rt = true;
     exe.root_module.addImport("toml", toml_module);
     exe.root_module.addImport("bearssl", bearssl_module);
     exe.linkLibrary(bearssl_package.artifact("zig-bearssl"));
-    exe.linkSystemLibrary("opaque");
-    exe.linkSystemLibrary("oprf");
-    exe.linkSystemLibrary("sodium");
+    //exe.linkSystemLibrary("opaque");
+    //exe.linkSystemLibrary("oprf");
+    //exe.linkSystemLibrary("sodium");
+    exe.addObjectFile(.{ .cwd_relative = ("/usr/lib/libopaque.a") });
+    exe.addObjectFile(.{ .cwd_relative = ("/usr/lib/libsodium.a") });
+    exe.addObjectFile(.{ .cwd_relative = ("/usr/lib/liboprf.a") });
+    exe.addObjectFile(.{ .cwd_relative = ("/usr/lib/liboprf-noiseXK.a") });
     exe.addSystemIncludePath(.{ .cwd_relative = "/usr/include/oprf/noiseXK/" });
     exe.addSystemIncludePath(.{ .cwd_relative = "/usr/include/oprf/noiseXK/karmel" });
     exe.addSystemIncludePath(.{ .cwd_relative = "/usr/include/oprf/noiseXK/karmel/minimal" });
     exe.addIncludePath(b.path("."));
     exe.addCSourceFile(.{ .file = b.path("workaround.c"), .flags = &[_][]const u8{"-Wall"} });
-    exe.linkLibC();
+    exe.addCSourceFile(.{ .file = b.path("cc-runtime/cc-runtime.c"), .flags = &[_][]const u8{"-Wall"} });
+    //exe.linkLibC();
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
